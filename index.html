@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>아이의 목소리 AAC</title>
+    <style>
+        body { font-family: 'Apple SD Gothic Neo', sans-serif; background-color: #f7fafc; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        .container { width: 100%; max-width: 500px; text-align: center; }
+        h1 { color: #1a365d; font-size: 24px; margin-bottom: 20px; }
+        .input-group { display: flex; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-radius: 15px; overflow: hidden; background: white; }
+        input { flex: 1; padding: 18px; border: none; font-size: 16px; outline: none; }
+        button#send-btn { padding: 0 25px; background-color: #3182ce; color: white; border: none; font-weight: bold; cursor: pointer; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; }
+        .aac-btn { height: 110px; border: none; border-radius: 24px; font-size: 20px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.05); transition: 0.1s; }
+        .aac-btn:active { transform: scale(0.95); }
+        .c1 { background-color: #feb2b2; } .c2 { background-color: #9ae6b4; } .c3 { background-color: #faf089; }
+        .c4 { background-color: #bee3f8; } .c5 { background-color: #e9d8fd; } .c6 { background-color: #fed7e2; }
+        .c7 { background-color: #e2e8f0; grid-column: span 2; }
+        #status { margin-bottom: 10px; font-size: 14px; font-weight: bold; min-height: 20px; }
+        .err { color: #e53e3e; } .ok { color: #3182ce; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>아이의 목소리</h1>
+    <div id="status">연결 준비 중...</div>
+    <div class="input-group">
+        <input type="text" id="situation" placeholder="상황을 적어주세요 (예: 밥 먹기)">
+        <button id="send-btn">생성</button>
+    </div>
+    <div class="grid" id="btn-grid"></div>
+</div>
+
+<script>
+    // 요청하신 키 적용
+    const API_KEY = 'AIzaSyDRNmTnStYEkQB010T9eNAR6L2IH4poOhA';
+    
+    // 시도할 모든 엔드포인트 조합
+    const ENDPOINTS = [
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${API_KEY}`
+    ];
+
+    const statusDiv = document.getElementById('status');
+    const grid = document.getElementById('btn-grid');
+
+    async function fetchAnswers() {
+        const text = document.getElementById('situation').value.trim();
+        if (!text) return;
+
+        statusDiv.className = "ok";
+        statusDiv.innerText = "가장 적합한 경로를 찾는 중...";
+        
+        for (let url of ENDPOINTS) {
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: `상황: "${text}". 자폐 아동이 할 법한 대답 7개를 콤마로만 구분해서 단어만 써줘.` }] }]
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.error) {
+                    console.warn(`이 경로는 실패: ${url}`, data.error.message);
+                    continue; // 404나 권한 에러면 다음 경로 시도
+                }
+
+                const result = data.candidates[0].content.parts[0].text;
+                const options = result.split(/[,\n]/).map(s => s.trim()).filter(s => s !== "");
+                render(options);
+                statusDiv.innerText = "생성 완료!";
+                return; // 성공 시 종료
+            } catch (e) {
+                continue;
+            }
+        }
+        
+        statusDiv.className = "err";
+        statusDiv.innerText = "모든 경로 호출 실패. 키의 설정이나 네트워크를 확인하세요.";
+    }
+
+    function render(list) {
+        grid.innerHTML = '';
+        list.slice(0, 7).forEach((txt, i) => {
+            const btn = document.createElement('button');
+            btn.className = `aac-btn c${i+1}`;
+            btn.innerText = txt;
+            btn.onclick = () => {
+                window.speechSynthesis.cancel();
+                const speech = new SpeechSynthesisUtterance(txt);
+                speech.lang = 'ko-KR';
+                window.speechSynthesis.speak(speech);
+            };
+            grid.appendChild(btn);
+        });
+    }
+
+    document.getElementById('send-btn').onclick = fetchAnswers;
+    render(["좋아요", "싫어요", "도와줘요", "배고파요", "졸려요", "기다려요", "놀고싶어"]);
+</script>
+
+</body>
+</html>
